@@ -1,0 +1,14 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Example
+Bundle-SymbolicName: com.seenu.tracecompass.example;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Bundle-Activator: com.seenu.tracecompass.example.Activator
+Bundle-Vendor: SEENU
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime,
+ org.eclipse.tracecompass.tmf.core;bundle-version="1.0.0",
+ org.eclipse.tracecompass.tmf.ui;bundle-version="1.0.0",
+ org.eclipse.core.resources;bundle-version="3.9.1"
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+Bundle-ActivationPolicy: lazy

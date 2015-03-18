@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+<extension
+         point="org.eclipse.linuxtools.tmf.core.tracetype">
+      <type
+            event_type="org.eclipse.tracecompass.tmf.core.event.TmfEvent"
+            id="com.seenu.tracecompass.example.csvtype"
+            isDirectory="false"
+            name="CSV Trace"
+            trace_type="com.seenu.tracecompass.example.csv.CSVTrace">
+      </type>
+   </extension>
+   <extension
+         point="org.eclipse.linuxtools.tmf.ui.tracetypeui">
+      <type
+            icon="icons/csv_img.png"
+            tracetype="com.seenu.tracecompass.example.csvtype">
+      </type>
+     </extension>
+</plugin>
