@@ -35,17 +35,17 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 
 	ITmfLocation currentLoc = null;
 	TmfLongLocation fCurrent;
-	
+
 	long count;
 
 	private long initOffset;
 	private long currentChunk;
-	
+
 	private File fFile;
 	private String[] fEventTypes;
 	private FileChannel fFileChannel;
 	private MappedByteBuffer fMappedByteBuffer;
-	
+
 	private static final long CHUNK_SIZE = 65536;
 
 	public CSVTrace() {
@@ -85,7 +85,7 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		if(header.endsWith(",")){
 			header = header.substring(0, header.length()-1);
 		}
-		
+
 		return header.split(","); //$NON-NLS-1$
 	}
 
@@ -110,7 +110,7 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		if(size<0){
 			System.out.println("ERROR: $$$$$");
 		}
-		
+
 		fMappedByteBuffer = fFileChannel.map(MapMode.READ_ONLY, position, size);
 		currentLoc = new TmfLongLocation(position);
 	}
@@ -138,7 +138,7 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		Long longVal = tl.getLocationInfo();
 		long chunkVal = longVal/CHUNK_SIZE;
 		long remainder = longVal % CHUNK_SIZE;
-		
+
 		if(chunkVal!=currentChunk){
 			try {
 				seekChunk(chunkVal);
@@ -147,7 +147,7 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 				e.printStackTrace();
 			}
 		}
-		
+
 		if(remainder<fMappedByteBuffer.limit()){
 			fMappedByteBuffer.position((int) remainder);
 		}
@@ -166,23 +166,37 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		Long info = location.getLocationInfo();
 		TmfEvent event = null;
 		StringBuffer buffer;
-		
+
 		System.out.print("Count: "+ ++count);
 		System.out.println("; Parsing event rank: "+ context.getRank());
 
 		buffer= new StringBuffer();
-		String str;
+		String str = null;
 		final TmfEventField[] events = new TmfEventField[fEventTypes.length];
 		byte b[] = new byte[1];
 		for(int i=0; i< events.length; i++){
 			buffer = new StringBuffer();
-			fMappedByteBuffer.get(b);
-			str = new String(b);
+			if(fMappedByteBuffer.position()==fMappedByteBuffer.limit()){
+				if(fMappedByteBuffer.limit()==CHUNK_SIZE){
+					try {
+						seekChunk(++currentChunk);
+						fMappedByteBuffer.get(b);
+						str = new String(b);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}else{
+					return null;
+				}
+			}else{
+				fMappedByteBuffer.get(b);
+				str = new String(b);
+			}
 			while(!str.equals(",")){
 				if((str.equals("\n")&&i==events.length-1)||(str.equals("\r")&&i==events.length-1)){
 					break;
 				}
-				
+
 				buffer.append(str);
 
 				if(fMappedByteBuffer.position()==fMappedByteBuffer.limit()){
