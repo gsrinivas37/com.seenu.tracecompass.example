@@ -34,16 +34,19 @@ import com.seenu.tracecompass.example.Activator;
 public class CSVTrace extends TmfTrace implements ITmfEventParser{
 
 	ITmfLocation currentLoc = null;
-
 	TmfLongLocation fCurrent;
+	
+	long count;
 
-	private int fOffset;
+	private long initOffset;
+	private long currentChunk;
+	
 	private File fFile;
 	private String[] fEventTypes;
 	private FileChannel fFileChannel;
 	private MappedByteBuffer fMappedByteBuffer;
-
-	private static final int CHUNK_SIZE = 65536;
+	
+	private static final long CHUNK_SIZE = 65536;
 
 	public CSVTrace() {
 	}
@@ -71,12 +74,18 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 	}
 
 	private String[] readHeader(File file) {
+		System.out.println("");
 		String header = new String();
 		try (BufferedReader br = new BufferedReader(new FileReader(file));) {
 			header = br.readLine();
 		} catch (IOException e) {
 		}
-		fOffset = header.length() + 1;
+		initOffset = header.length() + 1;
+		header = header.trim();
+		if(header.endsWith(",")){
+			header = header.substring(0, header.length()-1);
+		}
+		
 		return header.split(","); //$NON-NLS-1$
 	}
 
@@ -86,20 +95,24 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		fFile = new File(path);
 		fFile.length();
 		fEventTypes = readHeader(fFile);
-
+		count = 0 ;
 		try {
 			fFileChannel = new FileInputStream(fFile).getChannel();
-			seek(0);
+			currentChunk = 0;
+			seekChunk(currentChunk);
 		} catch (IOException e) {
 		}
 	}
 
-	private void seek(long rank) throws IOException {
-		final int position = fOffset;
-		int size = Math.min((int) (fFileChannel.size() - position), CHUNK_SIZE);
+	private void seekChunk(long chunkNum) throws IOException {
+		final long position = initOffset + chunkNum*CHUNK_SIZE;
+		long size = Math.min((fFileChannel.size()-position), CHUNK_SIZE);
+		if(size<0){
+			System.out.println("ERROR: $$$$$");
+		}
+		
 		fMappedByteBuffer = fFileChannel.map(MapMode.READ_ONLY, position, size);
-
-		currentLoc = new TmfLongLocation(fOffset);
+		currentLoc = new TmfLongLocation(position);
 	}
 
 	@Override
@@ -122,9 +135,21 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 			tl = (TmfLongLocation) location;
 		}
 
-
-		if(tl.getLocationInfo()<fMappedByteBuffer.limit()){
-			fMappedByteBuffer.position(tl.getLocationInfo().intValue());
+		Long longVal = tl.getLocationInfo();
+		long chunkVal = longVal/CHUNK_SIZE;
+		long remainder = longVal % CHUNK_SIZE;
+		
+		if(chunkVal!=currentChunk){
+			try {
+				seekChunk(chunkVal);
+				currentChunk = chunkVal;
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		if(remainder<fMappedByteBuffer.limit()){
+			fMappedByteBuffer.position((int) remainder);
 		}
 
 		return new TmfContext(tl);
@@ -141,10 +166,9 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 		Long info = location.getLocationInfo();
 		TmfEvent event = null;
 		StringBuffer buffer;
-
-		if(fMappedByteBuffer.position()+fEventTypes.length>fMappedByteBuffer.limit()){
-			return null;
-		}
+		
+		System.out.print("Count: "+ ++count);
+		System.out.println("; Parsing event rank: "+ context.getRank());
 
 		buffer= new StringBuffer();
 		String str;
@@ -157,26 +181,34 @@ public class CSVTrace extends TmfTrace implements ITmfEventParser{
 			while(!str.equals(",")){
 				if((str.equals("\n")&&i==events.length-1)||(str.equals("\r")&&i==events.length-1)){
 					break;
-				}else{
-					System.out.println("");
 				}
-
+				
 				buffer.append(str);
 
 				if(fMappedByteBuffer.position()==fMappedByteBuffer.limit()){
-					str = "\n";
+					if(fMappedByteBuffer.limit()==CHUNK_SIZE){
+						try {
+							seekChunk(++currentChunk);
+							fMappedByteBuffer.get(b);
+							str = new String(b);
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}else{
+						return null;
+					}
 				}else{
 					fMappedByteBuffer.get(b);
 					str = new String(b);
 				}
 			};
-			events[i] = new TmfEventField(fEventTypes[i], buffer.toString(), null);
+			events[i] = new TmfEventField(fEventTypes[i], buffer.toString().trim(), null);
 		}
 		long ts = Long.parseLong(events[0].getValue().toString());
 
 		final TmfEventField content = new TmfEventField(ITmfEventField.ROOT_FIELD_ID, null, events);
 		event = new TmfEvent(this, info, new TmfTimestamp(ts, ITmfTimestamp.NANOSECOND_SCALE), new TmfEventType(getTraceTypeId(), content), content);
-		currentLoc = new TmfLongLocation(fMappedByteBuffer.position());
+		currentLoc = new TmfLongLocation(currentChunk*CHUNK_SIZE + fMappedByteBuffer.position());
 
 		return event;
 	}
